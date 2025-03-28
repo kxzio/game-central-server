@@ -21,16 +21,26 @@
 #include <functional>
 #include <fstream>
 
+using boost::asio::ip::tcp;
+
 #define WIN32_LEAN_AND_MEAN
 #ifndef YOUR_HEADER_FILE_H 
 #define YOUR_HEADER_FILE_H
 #endif  //YOUR_HEADER_FILE_H
+
+struct ClientInfo
+{
+    std::shared_ptr<tcp::socket> socket;
+};
 
 class my_room
 {
 public:
     std::string name;
     int unique_id;
+
+    std::vector<ClientInfo> players_in_this_room;
+    std::shared_ptr<tcp::socket> admim;
 };
 
 std::vector < my_room > rooms;
@@ -71,8 +81,6 @@ std::string serialize_rooms()
     return result;
 }
 
-using boost::asio::ip::tcp;
-
 
 std::shared_ptr<boost::asio::io_context> io_context;
 
@@ -84,11 +92,6 @@ bool IsRequest(std::string socket, std::string message)
 class ChatServer
 {
 public:
-
-    struct ClientInfo
-    {
-        std::shared_ptr<tcp::socket> socket;
-    };
 
     ChatServer(boost::asio::io_context& io_context, const std::string& ip, short port, const std::string& nickname)
         : acceptor_(io_context, tcp::endpoint(boost::asio::ip::make_address(ip), port)), nickname_(nickname)
@@ -153,12 +156,33 @@ private:
                 if (IsRequest(buffer_message, "c.s:create_room:"))
                 {
                     std::string inner_data = buffer_message.erase(0, 16);
-                    rooms.push_back({ inner_data, generate_unique_int() });
+                    rooms.push_back
+                    (
+                        { 
+                            inner_data, 
+                            generate_unique_int()
+                            
+                        }
+                    );
+                    rooms.at(rooms.size() - 1).players_in_this_room.push_back({ socket });
+                    rooms.at(rooms.size() - 1).admim = socket;
                 }
                 else if (IsRequest(buffer_message, "c.s:get_rooms"))
                 {
-                    std::cout << "#ROOMS:" + serialize_rooms() << " : " << socket;
+                    std::cout << "User requested rooms : " + serialize_rooms() << " : ";
                     send_message_to_socket("#ROOMS:" + serialize_rooms(), socket);
+                }
+                else if (IsRequest(buffer_message, "c.s:close_room"))
+                {
+                    std::cout << "User (admin) closed his room";
+
+                    auto room_that_we_want_to_delete = 
+
+                    std::find_if(rooms.begin(), rooms.end(), [&](const my_room& target)
+                        {
+                            return target.admim == socket;
+                        });
+                    rooms.erase(room_that_we_want_to_delete);
                 }
 
                 for (auto& room : rooms)
