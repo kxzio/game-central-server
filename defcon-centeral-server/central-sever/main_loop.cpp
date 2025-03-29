@@ -31,6 +31,8 @@ using boost::asio::ip::tcp;
 struct ClientInfo
 {
     std::shared_ptr<tcp::socket> socket;
+    std::string nickname = "";
+    int id;
 };
 
 class my_room
@@ -45,6 +47,23 @@ public:
 
 std::vector < my_room > rooms;
 
+std::string serialize_vector_players(my_room room)
+{
+    std::ostringstream oss;
+    for (int i = 0; i < room.players_in_this_room.size(); i++)
+    {
+        room.players_in_this_room[i].id = i;
+
+        // Сериализация основных данных игрока
+        oss << i << "," << room.players_in_this_room[i].nickname << "," << "0" << "," << "0" << ",";
+
+        // Сериализация экономических данных
+        oss << "0" << "," << "0" << "," << "0";
+
+        oss << ";";
+    }
+    return oss.str();
+}
 
 int generate_unique_int()
 {
@@ -157,7 +176,6 @@ public:
     }
 
 
-
 private:
 
     void do_accept()
@@ -196,15 +214,52 @@ private:
                     );
                     rooms.at(rooms.size() - 1).players_in_this_room.push_back({ socket });
                     rooms.at(rooms.size() - 1).admim = socket;
+                    send_message_to_socket("#ROOMS:" + serialize_rooms(), socket);
+
+                    std::cout << "USER created server : " << inner_data.c_str() << "\n";
+
+                    std::cout << "Server list : " << "\n";
+                    for (int i = 0; i < rooms.size(); i++)
+                    {
+                        std::cout << i << "." << rooms[i].name << "\n";
+                    }
+
+
+                }
+                if (IsRequest(buffer_message, "c.s:updating_nickname:"))
+                {
+                    std::string inner_data = buffer_message.erase(0, 22);
+
+                    std::cout << "USER JOINED SERVER AND CREATED PROFILE : " << inner_data.c_str() << "\n";
+
+                    auto room_that_we_want_to_find =
+                        std::find_if(rooms.begin(), rooms.end(), [&](const my_room& target)
+                            {
+                                for (int i = 0; i < target.players_in_this_room.size(); i++)
+                                {
+                                    return target.players_in_this_room[i].socket == socket;
+                                }
+
+                            });
+
+                    auto player_that_we_want_to_find =
+                        std::find_if(room_that_we_want_to_find->players_in_this_room.begin(), room_that_we_want_to_find->players_in_this_room.end(), [&](const ClientInfo& target)
+                            {
+                                return target.socket == socket;              
+                            });
+
+                    player_that_we_want_to_find->nickname = inner_data;
+
+                    send_message_to_socket("#CLASS.PLAYERS_VECTOR:" + serialize_vector_players(*room_that_we_want_to_find), socket);
                 }
                 else if (IsRequest(buffer_message, "c.s:get_rooms"))
                 {
-                    std::cout << "User requested rooms : " + serialize_rooms() << " : ";
+                    std::cout << "User requested rooms : " + serialize_rooms() << "" << "\n";
                     send_message_to_socket("#ROOMS:" + serialize_rooms(), socket);
                 }
                 else if (IsRequest(buffer_message, "c.s:close_room"))
                 {
-                    std::cout << "User (admin) closed his room";
+                    std::cout << "User (admin) closed his room" << "\n";
 
                     auto room_that_we_want_to_delete = 
 
@@ -214,23 +269,35 @@ private:
                         });
                     rooms.erase(room_that_we_want_to_delete);
                 }
+                else if (IsRequest(buffer_message, "c.s:join_room:"))
+                {
+                    std::string inner_data = buffer_message.erase(0, 14);
+
+                    std::cout << "User joined server" << "\n";
+                    auto room_that_we_want_to_find =
+                        std::find_if(rooms.begin(), rooms.end(), [&](const my_room& target)
+                            {
+                                return target.unique_id == std::atoi(inner_data.c_str());
+
+                            });
+
+                    ClientInfo c;
+                    c.socket = socket; 
+                    room_that_we_want_to_find->players_in_this_room.push_back(c);
+
+                }
                 else if (IsRequest(buffer_message, "CHAT:"))
                 {
                     std::string inner_data = buffer_message.erase(0, 5);
-                    std::cout << "Chat message - " + inner_data;
+                    std::cout << "Chat message - " + inner_data << "\n";
                     send_message_to_all_members_of_room("#CHAT:" + inner_data, socket);
                 }
                 else
                 {
+                    std::cout << "INGAME MSG: " + buffer_message << "\n";
                     send_message_to_all_members_of_room(buffer_message, socket);
                 }
 
-
-                for (auto& room : rooms)
-                {
-                    std::cout << room.name.c_str() << "\n";
-                }
-                std::cout << "\n";
 
                 do_read(socket);
             }
@@ -272,6 +339,7 @@ void async_create_control_server()
 int main()
 {
 
+    setlocale(LC_ALL, "Russian");
     async_create_control_server();    
 
 	return 0;
