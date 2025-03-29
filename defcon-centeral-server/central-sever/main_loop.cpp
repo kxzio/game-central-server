@@ -124,6 +124,37 @@ public:
                     std::cerr << "Ошибка отправки: " << ec.message() << "\n";
             });
     }
+    void send_message_to_all_members_of_room(const std::string& message, std::shared_ptr<tcp::socket> socket)
+    {
+
+        auto safe_message = std::make_shared<std::string>(message.empty() ? "\n" : message + "\n");
+
+ 
+        auto room_that_we_want_to_find =
+
+            std::find_if(rooms.begin(), rooms.end(), [&](const my_room& target)
+                {
+                    for (int i = 0; i < target.players_in_this_room.size(); i++)
+                    {
+                        return target.players_in_this_room[i].socket == socket;
+                    }
+
+                });
+
+
+        for (auto& client : room_that_we_want_to_find->players_in_this_room)
+        {
+            if (socket == client.socket)
+                continue;
+
+            boost::asio::async_write(*client.socket, boost::asio::buffer(*safe_message),
+                [safe_message](boost::system::error_code ec, std::size_t /*bytes_transferred*/)
+                {
+                    if (ec)
+                        std::cerr << "Ошибка отправки: " << ec.message() << "\n";
+                });
+        }
+    }
 
 
 
@@ -160,8 +191,7 @@ private:
                     (
                         { 
                             inner_data, 
-                            generate_unique_int()
-                            
+                            generate_unique_int()                           
                         }
                     );
                     rooms.at(rooms.size() - 1).players_in_this_room.push_back({ socket });
@@ -184,6 +214,17 @@ private:
                         });
                     rooms.erase(room_that_we_want_to_delete);
                 }
+                else if (IsRequest(buffer_message, "CHAT:"))
+                {
+                    std::string inner_data = buffer_message.erase(0, 5);
+                    std::cout << "Chat message - " + inner_data;
+                    send_message_to_all_members_of_room("#CHAT:" + inner_data, socket);
+                }
+                else
+                {
+                    send_message_to_all_members_of_room(buffer_message, socket);
+                }
+
 
                 for (auto& room : rooms)
                 {
