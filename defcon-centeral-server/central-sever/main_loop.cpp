@@ -215,6 +215,7 @@ private:
                     rooms.at(rooms.size() - 1).players_in_this_room.push_back({ socket });
                     rooms.at(rooms.size() - 1).admim = socket;
                     send_message_to_socket("#ROOMS:" + serialize_rooms(), socket);
+                    send_message_to_socket("#CONNECTED", socket);
 
                     std::cout << "USER created server : " << inner_data.c_str() << "\n";
 
@@ -247,10 +248,20 @@ private:
                             {
                                 return target.socket == socket;              
                             });
+                    
+                    if (player_that_we_want_to_find != room_that_we_want_to_find->players_in_this_room.end())
+                    {
+                        player_that_we_want_to_find->nickname = inner_data;
 
-                    player_that_we_want_to_find->nickname = inner_data;
+                        std::cout << "Users list : " << "\n";
+                        for (int i = 0; i < room_that_we_want_to_find->players_in_this_room.size(); i++)
+                        {
+                            std::cout << i << "." << room_that_we_want_to_find->players_in_this_room.at(i).nickname << "\n";
+                        }
 
-                    send_message_to_socket("#CLASS.PLAYERS_VECTOR:" + serialize_vector_players(*room_that_we_want_to_find), socket);
+                        send_message_to_all_members_of_room("#CLASS.PLAYERS_VECTOR:" + serialize_vector_players(*room_that_we_want_to_find), socket);
+                        send_message_to_socket("#CLASS.PLAYERS_VECTOR:" + serialize_vector_players(*room_that_we_want_to_find), socket);
+                    }
                 }
                 else if (IsRequest(buffer_message, "c.s:get_rooms"))
                 {
@@ -273,7 +284,6 @@ private:
                 {
                     std::string inner_data = buffer_message.erase(0, 14);
 
-                    std::cout << "User joined server" << "\n";
                     auto room_that_we_want_to_find =
                         std::find_if(rooms.begin(), rooms.end(), [&](const my_room& target)
                             {
@@ -281,10 +291,14 @@ private:
 
                             });
 
+                    std::cout << "User wants to join server : " << room_that_we_want_to_find->name << "\n";
+
                     ClientInfo c;
                     c.socket = socket; 
                     room_that_we_want_to_find->players_in_this_room.push_back(c);
+                    send_message_to_socket("#CONNECTED", socket);
 
+                    std::cout << "User joined server" << "\n";
                 }
                 else if (IsRequest(buffer_message, "CHAT:"))
                 {
