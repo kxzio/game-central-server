@@ -56,10 +56,7 @@ std::string serialize_vector_players(my_room room)
         room.players_in_this_room[i].id = i;
 
         // Сериализация основных данных игрока
-        oss << i << "," << room.players_in_this_room[i].nickname << "," << "0" << "," << "0" << ",";
-
-        // Сериализация экономических данных
-        oss << "0" << "," << "0" << "," << "0";
+        oss << i << "," << room.players_in_this_room[i].nickname << "," << "0" << "," << "0" ;
 
         oss << ";";
     }
@@ -224,8 +221,9 @@ private:
                 std::istream is(buffer.get());
                 std::string buffer_message;
                 std::getline(is, buffer_message);
+                    
+                system("cls"); // for linux - "clear"
 
-                
                 //non-rooms processing
                 if      (IsRequest(buffer_message, "c.s:create_room:"))
                 {
@@ -424,7 +422,7 @@ void control_rooms()
             //time activity check
             auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - rooms[i].last_message_time).count();
 
-            if (elapsed > 30)
+            if (elapsed > 230)
             {
                 std::cout << "Room " << rooms[i].name << " Has been deleted for being not active" << std::endl;
                 server->send_message_to_all_members_of_room("#SERVER:CLOSED_CONNECTION", rooms[i].players_in_this_room[0].socket);
